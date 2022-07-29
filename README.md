@@ -1,6 +1,8 @@
 # TeslaTrack
 Tesla tracker with geofencing and notification
 
+***WIP***
+
 This uses the TeslaPy module and requires OAUTH authentication with the tesla servers.
 
 N.B. The TeslaPy module seems to be built for 'api_version'>=4.x and doesn't work so well with older cars (e.g., 2014 ModelS is currently at 'api_version'=3.6).  The module's behavior with lower api versions is unpredictable (e.g., sometimes it returns data from another of the list of vehicles).
@@ -25,3 +27,9 @@ N.B. The TeslaPy module seems to be built for 'api_version'>=4.x and doesn't wor
       - vehicle enters <region>
       - vehicle exists <region>
   - run server in background, interact with it through cli and web interface
+* Notifications
+  - ?
+* Regions
+  - ?
+
+
