@@ -11,6 +11,7 @@ N.B. The TeslaPy module seems to be built for 'api_version'>=4.x and doesn't wor
 * Fork TeslaPy and make it work for 'api_version'<4.x
 * Find an authentication mechanism that runs on linux
 * Create web-based interface
+* Integrate with maps -- current locations, regions display/define, etc.
 
 **Design Notes**
 * key features
@@ -28,8 +29,13 @@ N.B. The TeslaPy module seems to be built for 'api_version'>=4.x and doesn't wor
       - vehicle exists <region>
   - run server in background, interact with it through cli and web interface
 * Notifications
-  - ?
+  - log
+  - SMS
+  - push notifications to mobile app
+  - email
 * Regions
-  - ?
+  - point: (lat,lon)
+  - circle: (lat, lon, radius)
+  - polygon: [(lat,lon), ...]
 
 
