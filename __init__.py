@@ -1,11 +1,22 @@
 """
-TeslaTrack package
+################################################################################
+#
+# TeslaTrack package
+#
+################################################################################
 """
 
 import sys
 
 from geopy import Nominatim
 
+
+def condPrint(str):
+    """Conditional print
+      Print a string if VERBOSE is non-zero
+    """
+    if (VERBOSE):
+        print(str)
 
 def fatalError(msg):
     """Print error message and exit
