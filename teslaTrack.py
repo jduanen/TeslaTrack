@@ -25,58 +25,27 @@ import sys
 import time
 
 import yaml
+import teslapy
+
+from CommandInterpreter import CommandInterpreter
+from Tracker import Tracker
+
+from __init__ import * #### FIXME
 
 
-# default path to configs file
-DEF_CONFIGS_FILE = "./teslaTrack.yml"
+DEF_LOG_LEVEL = "INFO"  #"DEBUG"  #"WARNING"
 
-DEF_LOG_LEVEL = "WARNING"
+DEF_CONFIG_FILE = "./teslaTrack.yml"
 
 DEFAULTS = {
-    'logLevel': "INFO",  #"DEBUG"  #"WARNING"
+    'logLevel': DEF_LOG_LEVEL,
+    'logFile': None  # None means use stdout
 }
 
 
-def commandInterpreter(trackers, cmds, resps):
-    ''' TBD
-    '''
-    #### TODO implement cmd interpreter and send cmds to running trackers to restart them and change their events
-    cmd = ""
-    while True:
-        line = input("> ")
-        words = line.split(' ')
-        cmd = words[0].lower().strip()
-        args = words[1:]
-        if cmd == 'l':
-            print(f"Tracking: {trackers.keys()}")
-        if cmd == 'p':
-            vin = args[0]
-            if vin not in trackers:
-                print(f"ERROR: VIN '{vin}' not being tracked")
-            else:
-                print(dumpQueue(resps[vin]))
-        if cmd == 'r':
-            pass
-        if cmd == 's':
-            vin = args[0]
-            if vin not in trackers:
-                print(f"ERROR: VIN '{vin}' not being tracked")
-            else:
-                cmds[vin].put("STOP")
-                #### TODO reread trackers
-        elif cmd == 'q':
-            print("Exiting...")
-            break
-        elif cmd == '?' or cmd == 'h':
-            print("Help:")
-            print("    h: print this help message")
-            print("    l: show VINs of cars being tracked")
-            print("    p <vin>: print output from car given by <vin>")
-            print("    r: stop and restart all trackers, re-reading the configs file")
-            print("    s <vin>: stop tracking the car given by <vin>")
-            print("    q: quit")
-            print("    ?: print this help message")
-    return
+ci = None
+tasks = {}
+
 
 def dumpQueue(q):
     ''' Return the contents of a given message queue.
@@ -92,7 +61,39 @@ def dumpQueue(q):
     return result
 
 def run(options):
-    print("RUN")
+    global ci
+
+    vehicleInfo = []
+    with teslapy.Tesla(options.email) as tesla:
+        vehicles = tesla.vehicle_list()
+        for i, v in enumerate(vehicles):
+            vehicleInfo.append(v.get_vehicle_data())
+    for i, info in enumerate(vehicleInfo):
+        print(f"Car #{i}: {info['display_name']}")
+
+    cmdQs = {}
+    respQs = {}
+    for name in options.selected:
+        cmdQs[name] = mp.Queue()
+        respQs[name] = mp.Queue()
+        t = Tracker(name, cmdQs[name], respQs[name])
+        tasks[name] = mp.Process(target=t.run, args=())
+        tasks[name].start()
+        logging.info(f"Starting Tracker for {name}")
+
+    if options.interactive:
+        print("Starting CLI cmd interpreter")
+        respQs['ci'] = mp.Queue()
+        ci = CommandInterpreter()
+        ci.run(cmdQs)
+        ci = None
+
+    for taskName, task in tasks.items():
+        logging.info(f"Waiting on '{taskName}'")
+        task.join()
+        logging.debug(f"Results for {task}: {dumpQueue(respQs[taskName])}")
+
+    logging.info("Done")
     return 0
 
 def getOps():
@@ -104,94 +105,95 @@ def getOps():
             #### TODO stop, reload, and restart everything
         elif sig == signal.SIGINT:
             logging.info("SIGINT")
-            for vin in cmdQs:
-                logging.debug(f"Stopping: {vin}")
-                cmdQs[vin].put("STOP")
+            if ci:
+                print("XXXXX")
+                ci.terminate()
+            for taskName, task in tasks.items():
+                logging.info(f"Waiting on '{taskName}'")
+                task.join()
+                logging.info(f"'{taskName}' stopped")
 
-    usage = f"Usage: {sys.argv[0]} [-v] [-c <configsFile>] [-d <dbDir>] [-i] [-L <logLevel>] [-l <logFile>] [-p <passwd>] [-s <schemaFile>] [-V <VIN>]"
+    usage = f"Usage: {sys.argv[0]} [-v] [-c <configFile>] [-i] [-L <logLevel>] [-l <logFile>] [-s <nameList>] <email>"
     ap = argparse.ArgumentParser()
     ap.add_argument(
-        "-c", "--configsFile", action="store", type=str,
-        default=DEF_CONFIGS_FILE, help="path to file with configurations")
-    ap.add_argument(
-        "-d", "--dbDir", action="store", type=str,
-        help="path to a directory that contains the DB files for cars")
+        "-c", "--configFile", action="store", type=str,
+        default=DEF_CONFIG_FILE,
+        help="Path to file with configuration information; will be created if doesn't exist")
     ap.add_argument(
         "-i", "--interactive", action="store_true", default=False,
-        help="enable interactive mode")
+        help="Enable interactive mode")
     ap.add_argument(
-        "-L", "--logLevel", action="store", type=str, default=DEF_LOG_LEVEL,
+        "-L", "--logLevel", action="store", type=str,
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging level")
     ap.add_argument(
         "-l", "--logFile", action="store", type=str,
         help="Path to location of logfile (create it if it doesn't exist)")
     ap.add_argument(
-        "-p", "--password", action="store", type=str, help="user password")
+        "-s", "--select", action="store", type=str,
+        help="Comma separated list of names of vehicles to select")
     ap.add_argument(
-        "-s", "--schemaFile", action="store", type=str, default=DEF_SCHEMA_FILE,
-        help="path to the JSON Schema file that describes the DB's tables")
+        "-v", "--verbose", action="count", default=0, help="Print debug info")
     ap.add_argument(
-        "-V", "--VIN", action="store", type=str,
-        help="VIN of car to use (defaults to all found in config file")
-    ap.add_argument(
-        "-v", "--verbose", action="count", default=0, help="print debug info")
+        "email", action="store", type=str,
+        help="Email address of registered Tesla account")
     opts = ap.parse_args()
 
-    if not os.path.exists(opts.configsFile):
-        fatalError(f"Invalid configuration file: {opts.configsFile}")
+    if not os.path.exists(opts.configFile):
+        with open(opts.configFile, "w+") as f:
+            f.write("%YAML 1.1\n---\nconfig:\n")
 
-    #### TODO add check if configs file has proper protections
-
-    with open(opts.configsFile, "r") as confsFile:
-        confs = list(yaml.load_all(confsFile, Loader=yaml.Loader))[0]
+    with open(opts.configFile, "r") as configFile:
+        config = list(yaml.load_all(configFile, Loader=yaml.Loader))[0]
     if opts.verbose > 3:
-        json.dump(confs, sys.stdout, indent=4, sort_keys=True)    #### TMP TMP TMP
+        json.dump(config, sys.stdout, indent=4, sort_keys=True)    #### TMP TMP TMP
         print("")
-    #### TODO validate config file against ./configSchema.yml, remove error checks and rely on this
-
-    if opts.logLevel:
-        confs['config']['logLevel'] = opts.logLevel
-    else:
-        if 'logLevel' not in confs['config']:
-            confs['config']['logLevel'] = DEF_LOG_LEVEL
-    logLevel = confs['config']['logLevel']
-    l = getattr(logging, logLevel, None)
-    if not isinstance(l, int):
-        fatalError(f"Invalid log level: {logLevel}")
-
-    if opts.logFile:
-        confs['config']['logFile'] = opts.logFile
-    logFile = confs['config'].get('logFile')
-    if opts.verbose:
-        print(f"Logging to: {logFile}")
-    if logFile:
-        logging.basicConfig(filename=logFile, level=l)
-    else:
-        logging.basicConfig(level=l)
-
-    opts.user = confs.get('user')
-    if not opts.user:
-        input("user: ")
-    logging.debug(f"user: {opts.user}")
 
     # N.B. precedence order: command line options then config file inputs.
     #      if neither given, then propmt user for console input
-    if opts.password:
-        password = opts.password
-    else:
-        password = confs.get('passwd')
-    if not password:
-        password = input("password: ")
-    opts.passwd = password
 
-    signal.signal(signal.SIGHUP, signalHandler)
+    if opts.logLevel:
+        config['logLevel'] = opts.logLevel
+    else:
+        if 'logLevel' not in config:
+            config['logLevel'] = DEF_LOG_LEVEL
+    logLevel = config['logLevel']
+    level = getattr(logging, logLevel, None)
+    if not isinstance(level, int):
+        fatalError(f"Invalid log level: {logLevel}")
+
+    if opts.logFile:
+        config['logFile'] = opts.logFile
+    else:
+        if 'logFile' not in config:
+            config['logFile'] = None
+    logFile = config['logFile']
+    if logFile:
+        logging.basicConfig(filename=logFile, level=level)
+    else:
+        logging.basicConfig(level=level)
+
+    opts.selected = []
+    if opts.select:
+        opts.selected = opts.select.strip().split(',')
+
+    #### FIXME
+#    signal.signal(signal.SIGHUP, signalHandler)
     signal.signal(signal.SIGINT, signalHandler)
 
-    opts.confs = confs
+    opts.config = config
 
     if opts.verbose:
-        print("?")
+        print(f"    Account email:     {opts.email}")
+        if opts.selected:
+            print(f"    Selected Vehicles: {opts.selected}")
+        print(f"    Log level:         {logLevel}")
+        if logFile:
+            print(f"    Logging to:        {logFile}")
+        else:
+            print(f"    Logging to stdout")
+        if opts.interactive:
+            print("    Interactive mode enabled")
 
     return opts
 
