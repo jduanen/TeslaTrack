@@ -138,12 +138,15 @@ def getOps():
 
     if not os.path.exists(opts.configFile):
         with open(opts.configFile, "w+") as f:
-            f.write("%YAML 1.1\n---\nconfig:\n")
+            f.write("%YAML 1.1\n---\n{}\n")
+            if opts.verbose:
+                print(f"Creating config file: '{opts.configFile}'")
 
     with open(opts.configFile, "r") as configFile:
         config = list(yaml.load_all(configFile, Loader=yaml.Loader))[0]
-    if opts.verbose > 3:
-        json.dump(config, sys.stdout, indent=4, sort_keys=True)    #### TMP TMP TMP
+    if opts.verbose > 1:
+        print("Config file contents:")
+        json.dump(config, sys.stdout, indent=4, sort_keys=True)
         print("")
 
     # N.B. precedence order: command line options then config file inputs.
@@ -154,11 +157,17 @@ def getOps():
         config['logLevel'] = opts.logLevel
     if opts.logFile:
         config['logFile'] = opts.logFile
-    dictMerge(config, opts.config)
-    if opts.verbose > 2:
+    dictMerge(opts.config, config)
+    if opts.verbose:
         print("CONFIG:")
         json.dump(opts.config, sys.stdout, indent=4, sort_keys=True)
         print("")
+
+    if opts.config['logFile'] and not os.path.exists(opts.config['logFile']):
+        with open(opts.config['logFile'], "w+") as f:
+            if opts.verbose:
+                print(f"Creating log file: '{opts.config['logFile']}'")
+            f.write("")
 
     opts.config['level'] = getattr(logging, opts.config['logLevel'], None)
     if not isinstance(opts.config['level'], int):
