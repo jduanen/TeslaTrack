@@ -6,9 +6,16 @@
 ################################################################################
 """
 
+from enum import Enum
 import sys
+from time import sleep
 
 from geopy import Nominatim
+
+
+class CmdMsg(Enum):
+    NOOP = 0
+    EXIT = 1
 
 
 def condPrint(str):
