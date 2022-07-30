@@ -1,10 +1,15 @@
 '''
 ################################################################################
 #
-# TeslaTrack interactive command interpreter object
+# TeslaTrack interactive command interpreter
 #
 ################################################################################
 '''
+
+import logging
+
+from __init__ import * #### FIXME
+
 
 class CommandInterpreter():
     ''' #### FIXME
@@ -12,27 +17,33 @@ class CommandInterpreter():
     def __init__(self, prompt="> "):
         self.prompt = prompt
         self.cmd = ""
+        self.running = True
 
-    def run(self):
-        while True:
+    def run(self, cmdQueues):
+        while self.running:
             line = input(self.prompt)
             words = line.split(' ')
             cmd = words[0].lower().strip()
             args = words[1:]
             if cmd == 'a':
-                print(f"????")
-            if cmd == 'b':
-                pass
-            if cmd == 'c':
+                print(f"AAAA")
+            elif cmd == 'b':
                 pass
             elif cmd == 'q':
-                print("Exiting...")
+                break
+            elif cmd == 'x':
+                for qName, q in cmdQueues.items():
+                    logging.info("Shutting down {qName}")
+                    q.put(CmdMsg.EXIT)
                 break
             elif cmd == '?' or cmd == 'h':
                 print("Help:")
                 print("    h: print this help message")
-                print("    a: ????")
-                print("    q: quit")
+                print("    q: quit command interpeter")
+                print("    x: quit and shut down trackers")
                 print("    ?: print this help message")
-        logging.info("commandInterpreter: exiting")
+        print("Exiting...")
+        logging.info("CommandInterpreter: exiting")
 
+    def terminate(self):
+        self.running = False
