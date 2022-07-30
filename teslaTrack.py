@@ -33,12 +33,10 @@ from Tracker import Tracker
 from __init__ import * #### FIXME
 
 
-DEF_LOG_LEVEL = "INFO"  #"DEBUG"  #"WARNING"
-
 DEF_CONFIG_FILE = "./teslaTrack.yml"
 
-DEFAULTS = {
-    'logLevel': DEF_LOG_LEVEL,
+DEFAULT_CONFIG = {
+    'logLevel': "INFO",  #"DEBUG"  #"WARNING"
     'logFile': None  # None means use stdout
 }
 
@@ -106,7 +104,6 @@ def getOps():
         elif sig == signal.SIGINT:
             logging.info("SIGINT")
             if ci:
-                print("XXXXX")
                 ci.terminate()
             for taskName, task in tasks.items():
                 logging.info(f"Waiting on '{taskName}'")
@@ -151,27 +148,23 @@ def getOps():
 
     # N.B. precedence order: command line options then config file inputs.
     #      if neither given, then propmt user for console input
+    opts.config = DEFAULT_CONFIG
 
     if opts.logLevel:
         config['logLevel'] = opts.logLevel
-    else:
-        if 'logLevel' not in config:
-            config['logLevel'] = DEF_LOG_LEVEL
-    logLevel = config['logLevel']
-    level = getattr(logging, logLevel, None)
-    if not isinstance(level, int):
-        fatalError(f"Invalid log level: {logLevel}")
-
     if opts.logFile:
         config['logFile'] = opts.logFile
-    else:
-        if 'logFile' not in config:
-            config['logFile'] = None
-    logFile = config['logFile']
-    if logFile:
-        logging.basicConfig(filename=logFile, level=level)
-    else:
-        logging.basicConfig(level=level)
+    dictMerge(config, opts.config)
+    if opts.verbose > 2:
+        print("CONFIG:")
+        json.dump(opts.config, sys.stdout, indent=4, sort_keys=True)
+        print("")
+
+    opts.config['level'] = getattr(logging, opts.config['logLevel'], None)
+    if not isinstance(opts.config['level'], int):
+        fatalError(f"Invalid log level: {opts.config['logLevel']}")
+    logging.basicConfig(filename=opts.config.get('logFile', None),
+                        level=opts.config['level'])
 
     opts.selected = []
     if opts.select:
@@ -181,15 +174,13 @@ def getOps():
 #    signal.signal(signal.SIGHUP, signalHandler)
     signal.signal(signal.SIGINT, signalHandler)
 
-    opts.config = config
-
     if opts.verbose:
         print(f"    Account email:     {opts.email}")
         if opts.selected:
             print(f"    Selected Vehicles: {opts.selected}")
-        print(f"    Log level:         {logLevel}")
-        if logFile:
-            print(f"    Logging to:        {logFile}")
+        print(f"    Log level:         {opts.config['logLevel']}")
+        if opts.config['logFile']:
+            print(f"    Logging to:        {opts.config['logFile']}")
         else:
             print(f"    Logging to stdout")
         if opts.interactive:
