@@ -15,6 +15,7 @@
 '''
 
 import argparse
+from datetime import datetime
 import json
 import logging
 import multiprocessing as mp
@@ -43,6 +44,8 @@ DEFAULT_CONFIG = {
 
 ci = None
 tasks = {}
+tesla = None
+selectedVehicles = []
 
 
 def dumpQueue(q):
@@ -61,13 +64,19 @@ def dumpQueue(q):
 def run(options):
     global ci
 
-    vehicleInfo = []
-    with teslapy.Tesla(options.email) as tesla:
-        vehicles = tesla.vehicle_list()
-        for i, v in enumerate(vehicles):
-            vehicleInfo.append(v.get_vehicle_data())
-    for i, info in enumerate(vehicleInfo):
-        print(f"Car #{i}: {info['display_name']}")
+    tesla = teslapy.Tesla(options.email)
+    vehicles = tesla.vehicle_list()
+    for i, v in enumerate(vehicles):
+        if v['display_name'] in options.selected:
+            selectedVehicles.append(v)
+            if (False):  #### FIXME
+                v.sync_wake_up()
+            if options.verbose:
+                dn = v['display_name']
+                ## ts = v.last_seen()
+                ts = datetime.fromtimestamp(v['drive_state']['timestamp'] / 1000.0)
+                bl = v['charge_state']['battery_level']
+                print(f"Vehicle #{i}: {dn} last seen at {ts} with {bl}% battery level")
 
     cmdQs = {}
     respQs = {}
@@ -82,7 +91,7 @@ def run(options):
     if options.interactive:
         print("Starting CLI cmd interpreter")
         respQs['ci'] = mp.Queue()
-        ci = CommandInterpreter()
+        ci = CommandInterpreter(selectedVehicles)
         ci.run(cmdQs)
         ci = None
 
