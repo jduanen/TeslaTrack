@@ -26,6 +26,11 @@ N.B. The TeslaPy module seems to be built for 'api_version'>=4.x and doesn't wor
   - use jsonPath to extract different parts of the info across multiple vehicles
 * Web Interface
   - use maps to plot location, show trigger regions
+* Tracker
+  - one per selected vehicle (for failure indepencence and concurrency -- maybe for dynamic start/stop too)
+  - takes list of triggers and generates notification events of the desired type
+  - uses different notification mechanisms
+  - register/unregister triggers -- or restart and give it triggers at start?
 * Triggers -- things that generate notifications
   - Trigger Events
     * location enters/exits a defined Trigger Region
@@ -46,8 +51,10 @@ N.B. The TeslaPy module seems to be built for 'api_version'>=4.x and doesn't wor
     * circle: (lat, lon, radius)
     * polygon: [(lat,lon), ...]
 * Notifications
-  - log
-  - SMS
-  - push notifications to mobile app
-  - email
-
+  - different types: e.g.,
+    * log
+    * SMS
+    * push notifications to mobile app
+    * email
+  - same interface (ABC/Protocol)
+  - associated with triggers, can have multiple notifications associated with a given trigger instance
