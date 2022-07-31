@@ -15,27 +15,39 @@ N.B. The TeslaPy module seems to be built for 'api_version'>=4.x and doesn't wor
 
 **Design Notes**
 * key features
-  - enumerate all vehicles
+  - enumerate all vehicles -- select (proper) subset of them to track
   - report information on current status of selected vehicles
   - refer to vehicles by friendly names -- i.e. <Vehicle>['display_name']
   - define events and notifications
-    * vehicle events:
+  - run server in background, interact with it through cmd interpreter and web interface
+* Command Interpreter
+  - choose (proper) subset of selected vehicles to operate on
+  - print various (formatted) bits of the vehicle information
+  - use jsonPath to extract different parts of the info across multiple vehicles
+* Web Interface
+  - use maps to plot location, show trigger regions
+* Triggers -- things that generate notifications
+  - Trigger Events
+    * location enters/exits a defined Trigger Region
+    * value goes outside of a defined range of values
+    * location changes by at least some delta
+    * value changes by at least some delta
+    * example events:
       - odometer increased by <delta> over last odometer event
       - odometer exceeds <value>
       - climate outside range (<minTemp>, <maxTemp>)
+      - climate changes by <deltaValue>
       - 'shift_state' change
-      - 'shift_state' transition (<fromState>, <toState>)
+      - 'shift_state' transition (<fromState>, <toState>) ???? not like the others ????
       - vehicle enters <region>
-      - vehicle exists <region>
-  - run server in background, interact with it through cli and web interface
+      - vehicle exits <region>
+  - Trigger Regions:
+    * point: (lat,lon)
+    * circle: (lat, lon, radius)
+    * polygon: [(lat,lon), ...]
 * Notifications
   - log
   - SMS
   - push notifications to mobile app
   - email
-* Regions
-  - point: (lat,lon)
-  - circle: (lat, lon, radius)
-  - polygon: [(lat,lon), ...]
-
 
