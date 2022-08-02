@@ -15,8 +15,9 @@ from __init__ import * #### FIXME
 class Tracker():
     ''' #### FIXME
     '''
-    def __init__(self, vehicleName, inQ, outQ):
+    def __init__(self, vehicleName, tesla, inQ, outQ):
         self.name = vehicleName
+        self.tesla = tesla
         self.inQ = inQ
         self.outQ = outQ
 
@@ -26,7 +27,7 @@ class Tracker():
                 msg = self.inQ.get(True, None)
             except queue.Empty:
                 continue
-            if msg == CmdMsg.EXIT:
+            if msg == CmdMsg.SHUTDOWN:
                 break
             #### FIXME
             elif msg == "?":
@@ -34,5 +35,5 @@ class Tracker():
             #### FIXME
             print(f"running {self.name}")
             sleep(10)
-        self.outQ.put(CmdMsg.EXIT)
+        self.outQ.put(CmdMsg.EXITED)
         logging.info(f"Tracker for '{self.name}': exiting")

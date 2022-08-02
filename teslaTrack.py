@@ -28,7 +28,7 @@ import time
 import yaml
 import teslapy
 
-from CommandInterpreter import CommandInterpreter
+from CommandInterpreter import CommandInterpreter, CMD_INTR_NAME, CMD_INTR_PROMPT
 from Tracker import Tracker
 
 from __init__ import * #### FIXME
@@ -42,14 +42,13 @@ DEFAULT_CONFIG = {
 }
 
 
-ci = None
+cmdQs = {}
+respQ = None
 tasks = {}
-tesla = None
-selectedVehicles = []
 
 
 def dumpQueue(q):
-    ''' Return the contents of a given message queue.
+    '''Return the contents of a given message queue.
     '''
     result = []
     try:
@@ -61,9 +60,21 @@ def dumpQueue(q):
         pass
     return result
 
-def run(options):
-    global ci
+def shutdown():
+    '''Shut down all tasks by sending them shutdown messages and waiting for
+        them to exit
+    '''
+    for taskName, task in tasks.items():
+        cmdQs[taskName].put(CmdMsg.SHUTDOWN)
+        logging.info(f"Waiting on '{taskName}'")
+        task.join()
+        logging.debug(f"Results for {task}: {dumpQueue(respQ)}")
+        logging.info(f"'{taskName}' stopped")
 
+def run(options):
+    global respQ, cmdQs, tasks
+
+    selectedVehicles = []
     tesla = teslapy.Tesla(options.email)
     vehicles = tesla.vehicle_list()
     for i, v in enumerate(vehicles):
@@ -76,30 +87,33 @@ def run(options):
                 ## ts = v.last_seen()
                 ts = datetime.fromtimestamp(v['drive_state']['timestamp'] / 1000.0)
                 bl = v['charge_state']['battery_level']
-                print(f"Vehicle #{i}: {dn} last seen at {ts} with {bl}% battery level")
+                logging.info(f"Vehicle #{i}: {dn} last seen at {ts} with {bl}% battery level")
 
-    cmdQs = {}
-    respQs = {}
+    respQ = mp.Queue()
     for name in options.selected:
         cmdQs[name] = mp.Queue()
-        respQs[name] = mp.Queue()
-        t = Tracker(name, cmdQs[name], respQs[name])
+        t = Tracker(name, tesla, cmdQs[name], respQ)
         tasks[name] = mp.Process(target=t.run, args=())
         tasks[name].start()
         logging.info(f"Starting Tracker for {name}")
 
+    cmdQs[CMD_INTR_NAME] = mp.Queue()
     if options.interactive:
-        print("Starting CLI cmd interpreter")
-        respQs['ci'] = mp.Queue()
-        ci = CommandInterpreter(selectedVehicles)
-        ci.run(cmdQs)
-        ci = None
+        ci = CommandInterpreter(selectedVehicles, tesla, respQ)
+        tasks[CMD_INTR_NAME] = mp.Process(target=ci.run, args=())
+        tasks[CMD_INTR_NAME].start()
+        logging.info("Starting CLI cmd interpreter")
 
-    for taskName, task in tasks.items():
-        logging.info(f"Waiting on '{taskName}'")
-        task.join()
-        logging.debug(f"Results for {task}: {dumpQueue(respQs[taskName])}")
+    running = True
+    while running:
+        msg = respQ.get()
+        if msg == "?":
+            print("?")
+        elif msg == CmdMsg.EXITED:
+            logging.info("A process exited, so shutting down")
+            running = False
 
+    shutdown()
     logging.info("Done")
     return 0
 
@@ -112,12 +126,8 @@ def getOps():
             #### TODO stop, reload, and restart everything
         elif sig == signal.SIGINT:
             logging.info("SIGINT")
-            if ci:
-                ci.terminate()
-            for taskName, task in tasks.items():
-                logging.info(f"Waiting on '{taskName}'")
-                task.join()
-                logging.info(f"'{taskName}' stopped")
+            shutdown()
+            sys.exit(0)
 
     usage = f"Usage: {sys.argv[0]} [-v] [-c <configFile>] [-i] [-L <logLevel>] [-l <logFile>] [-s <nameList>] <email>"
     ap = argparse.ArgumentParser()
@@ -188,6 +198,9 @@ def getOps():
     if opts.select:
         opts.selected = opts.select.strip().split(',')
 
+    if 'triggers' not in opts.config:
+        opts.config['triggers'] = []
+
     #### FIXME
 #    signal.signal(signal.SIGHUP, signalHandler)
     signal.signal(signal.SIGINT, signalHandler)
@@ -203,6 +216,10 @@ def getOps():
             print(f"    Logging to stdout")
         if opts.interactive:
             print("    Interactive mode enabled")
+        if opts.config['triggers']:
+            print("    Triggers:")
+            json.dump(opts.config['triggers'], sys.stdout, indent=4, sort_keys=True)
+            print("")
 
     return opts
 
