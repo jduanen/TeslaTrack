@@ -15,7 +15,8 @@ from geopy import Nominatim
 
 class CmdMsg(Enum):
     NOOP = 0
-    EXIT = 1
+    SHUTDOWN = 1
+    EXITED = 2
 
 
 def condPrint(str):
