@@ -15,12 +15,17 @@ import sys
 from __init__ import * #### FIXME
 
 
+CMD_INTR_NAME = "ci"
+CMD_INTR_PROMPT = ">"
+
+
 class CommandInterpreter():
     ''' #### FIXME
     '''
-    def __init__(self, selectedVehicles, prompt="> "):
+    def __init__(self, selectedVehicles, tesla, outQ):
         self.vehicles = {v['display_name']: v for v in selectedVehicles}
-        self.prompt = prompt
+        self.tesla = tesla
+        self.outQ = outQ
         self.numVehicles = len(self.vehicles)
         self.chosenVehicleNames = []
         self.running = True
@@ -35,9 +40,11 @@ class CommandInterpreter():
         except IndexError:
             print(f"Error: invalid jsonPath expression -- '{jsonPathExpression}'")
 
-    def run(self, cmdQueues):
+    def run(self):
+        prompt = CMD_INTR_PROMPT + " "
+        sys.stdin = open(0)
         while self.running:
-            line = input(self.prompt).strip()
+            line = input(prompt)
             cmd = line.split(' ')[0]
             args = line[len(cmd) + 1:]
             if cmd == 'b':
@@ -67,9 +74,8 @@ class CommandInterpreter():
             elif cmd == 'n':
                 print(f"Number of Selected Vehicles: {self.numVehicles}")
             elif cmd == 'q':
-                for qName, q in cmdQueues.items():
-                    logging.info("Shutting down {qName}")
-                    q.put(CmdMsg.EXIT)
+                print("Shutting down...")
+                self.outQ.put(CmdMsg.EXITED)
                 break
             elif cmd == 'w':
                 for n in self.chosenVehicleNames:
@@ -77,7 +83,7 @@ class CommandInterpreter():
                     self.vehicles[n].sync_wake_up()
                     print(f"Vehicle {n} awake")
             elif cmd == 'x':
-                #### TODO background the program
+                #### TODO background the program and just exit the cmd interpreter
                 break
             elif cmd == '?' or cmd == 'h':
                 print("Help:")
@@ -92,7 +98,6 @@ class CommandInterpreter():
                 print("    w: wake up the currently chosen vehicle(s)")
                 print("    x: quit command interpeter")
                 print("    ?: print this help message")
-        print("Exiting...")
         logging.info("CommandInterpreter: exiting")
 
     def terminate(self):
